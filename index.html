@@ -141,6 +141,7 @@
             aspect-ratio: 1;
             display: flex;
             flex-direction: column;
+            touch-action: none; /* 禁止手势干扰 */
         }
 
         .grid {
@@ -161,27 +162,43 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: transform 0.1s ease;
+            position: relative;
             user-select: none;
             -webkit-user-select: none;
+            /* 按钮本身永远不缩小，点击区域始终不变 */
+            transform: none !important;
         }
 
-        /* 点击瞬间的收缩反馈，结束后立即恢复原样 */
-        .cell.popped {
-            animation: pop 0.25s ease;
+        /* 点击正确：伪元素执行收缩动画，按钮本体不动 */
+        .cell::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 12px;
+            background: inherit;
+            z-index: -1;
+            pointer-events: none;
         }
 
-        /* 点错的抖动反馈，结束后立即恢复原样 */
-        .cell.shook {
-            animation: shake 0.4s ease;
+        .cell.popped::after {
+            animation: pop-pseudo 0.25s ease;
+        }
+
+        /* 点击错误：伪元素执行抖动，按钮本体不动 */
+        .cell.shook::after {
+            animation: shake-pseudo 0.4s ease;
         }
 
         /* 已点击的格子视觉上和未点击的完全一致，仅禁用交互 */
-        .cell:disabled {
+        .cell[data-clicked="true"] {
             background: #f0f0f5;
             color: #333;
             cursor: default;
             opacity: 1;
+            pointer-events: none; /* 彻底阻断该格子的交互，但不影响相邻格子 */
         }
 
         .controls {
@@ -291,15 +308,15 @@
             to { opacity: 1; transform: scale(1); }
         }
 
-        /* 点击正确：瞬间收缩后回弹，不残留任何样式 */
-        @keyframes pop {
+        /* 伪元素收缩动画，不影响按钮本体点击区域 */
+        @keyframes pop-pseudo {
             0% { transform: scale(1); }
             40% { transform: scale(0.85); }
             100% { transform: scale(1); }
         }
 
-        /* 点击错误：短暂抖动，不残留任何样式 */
-        @keyframes shake {
+        /* 伪元素抖动动画 */
+        @keyframes shake-pseudo {
             0%, 100% { transform: translateX(0); }
             25% { transform: translateX(-6px); }
             75% { transform: translateX(6px); }
@@ -307,6 +324,7 @@
 
         @media (max-width: 400px) {
             .cell { font-size: 16px; border-radius: 8px; }
+            .cell::after { border-radius: 8px; }
             .title { font-size: 24px; }
             .mode-btn { padding: 16px; font-size: 16px; }
         }
@@ -400,7 +418,7 @@
                     ${best ? '最佳: <span class="best-value">' + formatTime(best) + '</span>' : '暂无记录'}
                 </span>
             `;
-            btn.onclick = () => startGame(size);
+            btn.onpointerdown = () => startGame(size);
             grid.appendChild(btn);
         });
     }
@@ -444,7 +462,14 @@
             cell.className = 'cell';
             cell.textContent = num;
             cell.dataset.number = num;
-            cell.onclick = () => handleCellClick(num, cell);
+            
+            // 关键修复：使用 pointerdown 替代 onclick，消除移动端 300ms 延迟
+            cell.onpointerdown = (e) => {
+                e.preventDefault(); // 阻止默认行为（如文本选择、菜单弹出）
+                e.stopPropagation();
+                handleCellClick(num, cell);
+            };
+            
             grid.appendChild(cell);
         });
     }
@@ -459,29 +484,27 @@
     }
 
     function handleCellClick(num, cell) {
-        if (!isPlaying || cell.disabled) return;
+        if (!isPlaying || cell.dataset.clicked === 'true') return;
         
         if (num === currentNumber) {
-            // 正确：播放收缩动画，然后禁用，视觉上保持原样
-            cell.classList.add('popped');
-            cell.disabled = true;
+            // 标记已点击，视觉上不做任何区分
+            cell.dataset.clicked = 'true';
             currentNumber++;
             updateTarget();
             
-            // 动画结束后移除类，确保不残留任何视觉差异
-            setTimeout(() => {
-                cell.classList.remove('popped');
-            }, 250);
+            // 收缩动画在伪元素上播放，按钮本体不动，不缩小点击区域
+            cell.classList.add('popped');
+            setTimeout(() => cell.classList.remove('popped'), 250);
             
             if (currentNumber > maxNumber) {
                 endGame();
             }
         } else {
-            // 错误：仅抖动提示，不禁用，不残留颜色
+            // 错误点击：立即重置动画（支持快速连点同一错误格）
+            cell.classList.remove('shook');
+            void cell.offsetWidth; // 强制重排，确保动画能重新触发
             cell.classList.add('shook');
-            setTimeout(() => {
-                cell.classList.remove('shook');
-            }, 400);
+            setTimeout(() => cell.classList.remove('shook'), 400);
         }
     }
 
@@ -533,6 +556,7 @@
         document.getElementById('modalOverlay').style.display = 'none';
     }
 
+    // 禁止双击缩放
     let lastTouchEnd = 0;
     document.addEventListener('touchend', (e) => {
         const now = Date.now();
@@ -542,6 +566,7 @@
         lastTouchEnd = now;
     }, false);
 
+    // 游戏期间禁止页面滚动
     document.addEventListener('touchmove', (e) => {
         if (isPlaying) {
             e.preventDefault();
