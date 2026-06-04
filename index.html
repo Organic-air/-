@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>舒尔特方格 - 注意力训练</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            color: #333;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .title {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .subtitle {
+            color: rgba(255,255,255,0.9);
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .menu-screen {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .mode-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+
+        .mode-btn {
+            background: white;
+            border: none;
+            border-radius: 16px;
+            padding: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #667eea;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .mode-btn:active {
+            transform: scale(0.95);
+        }
+
+        .mode-btn .best {
+            font-size: 12px;
+            color: #888;
+            font-weight: normal;
+        }
+
+        .mode-btn .best-value {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .game-screen {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .game-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: white;
+        }
+
+        .timer-display {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 1px;
+        }
+
+        .target-display {
+            background: rgba(255,255,255,0.9);
+            color: #667eea;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .grid-container {
+            background: white;
+            padding: 12px;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 100%;
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .grid {
+            display: grid;
+            width: 100%;
+            height: 100%;
+            gap: 8px;
+        }
+
+        .cell {
+            background: #f0f0f5;
+            border: none;
+            border-radius: 12px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s ease;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 点击瞬间的收缩反馈，结束后立即恢复原样 */
+        .cell.popped {
+            animation: pop 0.25s ease;
+        }
+
+        /* 点错的抖动反馈，结束后立即恢复原样 */
+        .cell.shook {
+            animation: shake 0.4s ease;
+        }
+
+        /* 已点击的格子视觉上和未点击的完全一致，仅禁用交互 */
+        .cell:disabled {
+            background: #f0f0f5;
+            color: #333;
+            cursor: default;
+            opacity: 1;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: white;
+            color: #667eea;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            opacity: 0.9;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal {
+            background: white;
+            padding: 30px;
+            border-radius: 24px;
+            width: 85%;
+            max-width: 350px;
+            text-align: center;
+            animation: popIn 0.3s ease;
+        }
+
+        .modal h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .modal .result-time {
+            font-size: 48px;
+            font-weight: bold;
+            color: #333;
+            margin: 15px 0;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .modal .record-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .modal .stats {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .hint {
+            color: rgba(255,255,255,0.8);
+            font-size: 13px;
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* 点击正确：瞬间收缩后回弹，不残留任何样式 */
+        @keyframes pop {
+            0% { transform: scale(1); }
+            40% { transform: scale(0.85); }
+            100% { transform: scale(1); }
+        }
+
+        /* 点击错误：短暂抖动，不残留任何样式 */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+
+        @media (max-width: 400px) {
+            .cell { font-size: 16px; border-radius: 8px; }
+            .title { font-size: 24px; }
+            .mode-btn { padding: 16px; font-size: 16px; }
+        }
+
+        @media (min-width: 401px) and (max-width: 500px) {
+            .cell { font-size: 18px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="menu-screen" id="menuScreen">
+        <div class="title">舒尔特方格</div>
+        <div class="subtitle">纯记忆模式 · 无视觉残留</div>
+        <div class="mode-grid" id="modeGrid"></div>
+        <div class="hint">
+            点击方格按 1 → N 顺序选择<br>
+            已点过的数字不会变色，全凭记忆
+        </div>
+    </div>
+
+    <div class="game-screen" id="gameScreen">
+        <div class="game-header">
+            <div class="timer-display" id="timer">00:00.00</div>
+            <div class="target-display" id="target">目标: 1</div>
+        </div>
+        <div class="grid-container">
+            <div class="grid" id="grid"></div>
+        </div>
+        <div class="controls">
+            <button class="btn btn-secondary" onclick="backToMenu()">返回菜单</button>
+            <button class="btn btn-primary" onclick="restartGame()">重新开始</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+        <h2>🎉 完成挑战!</h2>
+        <div id="recordBadge" style="display:none" class="record-badge">🏆 新纪录!</div>
+        <div class="result-time" id="resultTime">00:00.00</div>
+        <div class="stats" id="resultStats"></div>
+        <button class="btn btn-primary" onclick="restartGame(); closeModalDirect();" style="width:100%; margin-bottom:10px;">再来一次</button>
+        <button class="btn btn-secondary" onclick="backToMenu(); closeModalDirect();" style="width:100%;">返回菜单</button>
+    </div>
+</div>
+
+<script>
+    let currentSize = 5;
+    let currentNumber = 1;
+    let maxNumber = 25;
+    let startTime = null;
+    let timerInterval = null;
+    let gridNumbers = [];
+    let isPlaying = false;
+    let records = {};
+
+    function loadRecords() {
+        const saved = localStorage.getItem('schulte_records');
+        if (saved) records = JSON.parse(saved);
+    }
+
+    function saveRecords() {
+        localStorage.setItem('schulte_records', JSON.stringify(records));
+    }
+
+    function getBestRecord(size) {
+        return records[size] || null;
+    }
+
+    function formatTime(ms) {
+        const minutes = Math.floor(ms / 60000);
+        const seconds = Math.floor((ms % 60000) / 1000);
+        const centis = Math.floor((ms % 1000) / 10);
+        return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}.${String(centis).padStart(2,'0')}`;
+    }
+
+    function renderMenu() {
+        const grid = document.getElementById('modeGrid');
+        grid.innerHTML = '';
+        const modes = [5, 6, 7, 8, 9];
+        
+        modes.forEach(size => {
+            const best = getBestRecord(size);
+            const btn = document.createElement('button');
+            btn.className = 'mode-btn';
+            btn.innerHTML = `
+                <span>${size} × ${size}</span>
+                <span class="best">
+                    ${best ? '最佳: <span class="best-value">' + formatTime(best) + '</span>' : '暂无记录'}
+                </span>
+            `;
+            btn.onclick = () => startGame(size);
+            grid.appendChild(btn);
+        });
+    }
+
+    function shuffle(array) {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    function startGame(size) {
+        currentSize = size;
+        maxNumber = size * size;
+        currentNumber = 1;
+        isPlaying = true;
+        
+        gridNumbers = shuffle(Array.from({length: maxNumber}, (_, i) => i + 1));
+        
+        document.getElementById('menuScreen').style.display = 'none';
+        document.getElementById('gameScreen').style.display = 'flex';
+        
+        renderGrid();
+        updateTarget();
+        
+        startTime = Date.now();
+        document.getElementById('timer').textContent = '00:00.00';
+        timerInterval = setInterval(updateTimer, 10);
+    }
+
+    function renderGrid() {
+        const grid = document.getElementById('grid');
+        grid.innerHTML = '';
+        grid.style.gridTemplateColumns = `repeat(${currentSize}, 1fr)`;
+        grid.style.gridTemplateRows = `repeat(${currentSize}, 1fr)`;
+        
+        gridNumbers.forEach((num) => {
+            const cell = document.createElement('button');
+            cell.className = 'cell';
+            cell.textContent = num;
+            cell.dataset.number = num;
+            cell.onclick = () => handleCellClick(num, cell);
+            grid.appendChild(cell);
+        });
+    }
+
+    function updateTimer() {
+        const elapsed = Date.now() - startTime;
+        document.getElementById('timer').textContent = formatTime(elapsed);
+    }
+
+    function updateTarget() {
+        document.getElementById('target').textContent = `目标: ${currentNumber}`;
+    }
+
+    function handleCellClick(num, cell) {
+        if (!isPlaying || cell.disabled) return;
+        
+        if (num === currentNumber) {
+            // 正确：播放收缩动画，然后禁用，视觉上保持原样
+            cell.classList.add('popped');
+            cell.disabled = true;
+            currentNumber++;
+            updateTarget();
+            
+            // 动画结束后移除类，确保不残留任何视觉差异
+            setTimeout(() => {
+                cell.classList.remove('popped');
+            }, 250);
+            
+            if (currentNumber > maxNumber) {
+                endGame();
+            }
+        } else {
+            // 错误：仅抖动提示，不禁用，不残留颜色
+            cell.classList.add('shook');
+            setTimeout(() => {
+                cell.classList.remove('shook');
+            }, 400);
+        }
+    }
+
+    function endGame() {
+        isPlaying = false;
+        clearInterval(timerInterval);
+        
+        const elapsed = Date.now() - startTime;
+        const timeStr = formatTime(elapsed);
+        const best = getBestRecord(currentSize);
+        const isNewRecord = !best || elapsed < best;
+        
+        if (isNewRecord) {
+            records[currentSize] = elapsed;
+            saveRecords();
+        }
+        
+        document.getElementById('resultTime').textContent = timeStr;
+        document.getElementById('recordBadge').style.display = isNewRecord ? 'block' : 'none';
+        
+        let statsHtml = `${currentSize}×${currentSize} 方格完成<br>`;
+        if (best && !isNewRecord) {
+            statsHtml += `本模式最佳: ${formatTime(best)}`;
+        }
+        document.getElementById('resultStats').innerHTML = statsHtml;
+        
+        document.getElementById('modalOverlay').style.display = 'flex';
+    }
+
+    function restartGame() {
+        startGame(currentSize);
+    }
+
+    function backToMenu() {
+        isPlaying = false;
+        clearInterval(timerInterval);
+        document.getElementById('gameScreen').style.display = 'none';
+        document.getElementById('menuScreen').style.display = 'flex';
+        renderMenu();
+    }
+
+    function closeModal(event) {
+        if (event.target === document.getElementById('modalOverlay')) {
+            document.getElementById('modalOverlay').style.display = 'none';
+        }
+    }
+
+    function closeModalDirect() {
+        document.getElementById('modalOverlay').style.display = 'none';
+    }
+
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+            e.preventDefault();
+        }
+        lastTouchEnd = now;
+    }, false);
+
+    document.addEventListener('touchmove', (e) => {
+        if (isPlaying) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    loadRecords();
+    renderMenu();
+</script>
+
+</body>
+</html>
